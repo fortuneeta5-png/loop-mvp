@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loop — Feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0A0A0D;
+    --ink: #F4F2ED;
+    --ink-dim: rgba(244,242,237,0.68);
+    --ink-faint: rgba(244,242,237,0.4);
+    --signal: #FF3D6E;
+    --teal: #2DD4BF;
+    --panel: rgba(20,20,24,0.55);
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif; overscroll-behavior-y:none;
+  }
+  .num{ font-family:'Space Grotesk',sans-serif; font-weight:700; }
+
+  /* ---------- Feed ---------- */
+  .feed{
+    height:100dvh; width:100%; overflow-y:scroll; scroll-snap-type:y mandatory;
+    scrollbar-width:none;
+  }
+  .feed::-webkit-scrollbar{ display:none; }
+
+  .slide{
+    position:relative; height:100dvh; width:100%; scroll-snap-align:start;
+    display:flex; align-items:flex-end; overflow:hidden; background:#000;
+  }
+  .slide video{
+    position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
+    filter:saturate(1.05);
+  }
+  .slide::after{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.75) 100%);
+    pointer-events:none;
+  }
+
+  /* watch-progress hairline, top of each slide — signature element */
+  .progress-track{
+    position:absolute; top:calc(env(safe-area-inset-top, 14px) + 46px);
+    left:16px; right:16px; height:2px; border-radius:2px;
+    background:rgba(244,242,237,0.18); overflow:hidden; z-index:5;
+  }
+  .progress-fill{
+    height:100%; width:0%; background:var(--signal);
+    transition:width .1s linear;
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:absolute; top:0; left:0; right:0; z-index:6;
+    padding:calc(env(safe-area-inset-top, 14px) + 10px) 16px 0;
+    display:flex; align-items:center; justify-content:center; gap:26px;
+  }
+  .topbar button{
+    background:none; border:none; color:var(--ink-faint); font-family:'Inter';
+    font-size:15px; font-weight:600; padding:4px 0; cursor:pointer;
+  }
+  .topbar button.active{ color:var(--ink); position:relative; }
+  .topbar button.active::after{
+    content:''; position:absolute; left:50%; bottom:-6px; transform:translateX(-50%);
+    width:18px; height:3px; border-radius:3px; background:var(--signal);
+  }
+  .logout-btn{
+    position:fixed; top:calc(env(safe-area-inset-top, 14px) + 12px); right:16px; z-index:7;
+    background:var(--panel); backdrop-filter:blur(6px); border:none; border-radius:20px;
+    color:var(--ink-dim); font-size:12px; font-weight:500; padding:6px 12px; cursor:pointer;
+  }
+
+  /* ---------- Caption block ---------- */
+  .meta{
+    position:relative; z-index:4; padding:0 84px 24px 16px; width:100%;
+    padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  .handle{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .handle img{ width:34px; height:34px; border-radius:50%; object-fit:cover; border:1.5px solid var(--ink); }
+  .handle span{ font-weight:600; font-size:15px; }
+  .caption{ font-size:14.5px; line-height:1.4; color:var(--ink); max-width:78%; }
+  .caption .tag{ color:var(--teal); }
+  .sound{ display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; color:var(--ink-dim); }
+
+  /* ---------- Right action rail ---------- */
+  .rail{
+    position:absolute; right:12px; bottom:calc(28px + env(safe-area-inset-bottom, 0px));
+    z-index:4; display:flex; flex-direction:column; align-items:center; gap:20px;
+  }
+  .rail .avatar-wrap{ position:relative; margin-bottom:4px; }
+  .rail .avatar-wrap img{ width:46px; height:46px; border-radius:50%; object-fit:cover; border:2px solid var(--ink); }
+  .rail .avatar-wrap .plus{
+    position:absolute; bottom:-8px; left:50%; transform:translateX(-50%);
+    width:20px; height:20px; border-radius:50%; background:var(--signal);
+    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700;
+  }
+  .action{ display:flex; flex-direction:column; align-items:center; gap:5px; background:none; border:none; cursor:pointer; }
+  .action .icon{
+    width:46px; height:46px; border-radius:50%; background:var(--panel);
+    backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center;
+    transition:transform .15s ease;
+  }
+  .action.liked .icon{ background:rgba(255,61,110,0.18); }
+  .action.liked .icon svg{ fill:var(--signal); stroke:var(--signal); }
+  .action:active .icon{ transform:scale(0.88); }
+  .action .count{ font-size:12.5px; color:var(--ink-dim); }
+  svg{ width:24px; height:24px; stroke:var(--ink); stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* double-tap heart burst */
+  .burst{
+    position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+  }
+  .burst svg{
+    width:110px; height:110px; fill:var(--signal); stroke:none; opacity:0; transform:scale(0.4);
+  }
+  .burst.play svg{ animation:burstPop .7s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes burstPop{
+    0%{ opacity:0; transform:scale(0.4) rotate(-6deg); }
+    35%{ opacity:1; transform:scale(1.05) rotate(0deg); }
+    70%{ opacity:1; transform:scale(1); }
+    100%{ opacity:0; transform:scale(1.15); }
+  }
+
+  /* mute indicator */
+  .mute-hint{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:3; width:56px; height:56px; border-radius:50%; background:rgba(0,0,0,0.45);
+    display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none;
+  }
+  .mute-hint.show{ animation:hintFade 0.9s ease forwards; }
+  @keyframes hintFade{ 0%{opacity:0} 15%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+
+  /* ---------- Bottom nav ---------- */
+  .bottomnav{
+    position:fixed; left:0; right:0; bottom:0; z-index:10;
+    background:rgba(10,10,13,0.85); backdrop-filter:blur(14px);
+    border-top:1px solid rgba(244,242,237,0.08);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .navitem{
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    background:none; border:none; color:var(--ink-faint); font-size:10.5px; font-weight:500;
+  }
+  .navitem.active{ color:var(--ink); }
+  .navitem.active svg{ stroke:var(--ink); }
+  .navitem svg{ width:23px; height:23px; }
+  .upload-btn{
+    width:42px; height:32px; border-radius:9px; background:var(--signal);
+    display:flex; align-items:center; justify-content:center; margin-top:-2px;
+  }
+  .upload-btn svg{ stroke:var(--bg); width:20px; height:20px; }
+
+  /* hide feed scroll under bottom nav */
+  .feed{ padding-bottom:0; }
+</style>
+</head>
+<body>
+
+<div class="feed" id="feed"></div>
+
+<nav class="bottomnav">
+  <button class="navitem active">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+    Accueil
+  </button>
+  <button class="navitem">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    Découvrir
+  </button>
+  <button class="navitem" onclick="window.location.href='upload.html'">
+    <div class="upload-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+  </button>
+  <button class="navitem">
+    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+    Boîte
+  </button>
+  <button class="navitem">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+    Profil
+  </button>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* ---- Connexion au projet Supabase "loop-mvp" (séparé du projet EtaChop) ---- */
+const SUPABASE_URL = "https://rvauipnxvhluvmyaqwty.supabase.co";
+const SUPABASE_KEY = "sb_publishable_dPzLd2Upx4_kpjh5HSb7xg_lLRXekKs";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let MOCK_VIDEOS = [];
+let currentUser = null;
+let likedVideoIds = new Set();
+
+async function requireAuth(){
+  const { data } = await sb.auth.getSession();
+  if(!data.session){
+    window.location.href = 'auth.html';
+    return false;
+  }
+  currentUser = data.session.user;
+  return true;
+}
+
+async function loadVideos(){
+  const { data, error } = await sb
+    .from('videos')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if(error){
+    console.error('Erreur de chargement des vidéos:', error);
+    feedEl.innerHTML = `<div style="color:#fff;padding:40px;text-align:center;">Impossible de charger le feed. Vérifie ta connexion.</div>`;
+    return;
+  }
+
+  MOCK_VIDEOS = data.map(v => ({
+    id: v.id,
+    src: v.video_url,
+    user: v.display_name || 'utilisateur',
+    avatar: v.avatar_url || 'https://i.pravatar.cc/100',
+    caption: v.caption || '',
+    sound: v.sound_label || 'Son original',
+    likes: v.likes_count || 0,
+    comments: v.comments_count || 0,
+    shares: v.shares_count || 0
+  }));
+
+  if(currentUser){
+    const { data: myLikes } = await sb
+      .from('likes')
+      .select('video_id')
+      .eq('user_id', currentUser.id);
+    likedVideoIds = new Set((myLikes || []).map(l => l.video_id));
+  }
+
+  renderFeed();
+}
+
+const heartIcon = `<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.2C.4 8.4 2 4.5 5.7 4c2-.3 3.9.7 5 2.3C11.8 4.7 13.7 3.7 15.7 4c3.7.5 5.3 4.4 3.7 7.8C19.5 16.4 12 21 12 21z"/></svg>`;
+const commentIcon = `<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`;
+const shareIcon = `<svg viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v14"/></svg>`;
+
+function fmt(n){
+  if(n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,'') + 'k';
+  return n;
+}
+
+const feedEl = document.getElementById('feed');
+let io; // IntersectionObserver, recréé à chaque rendu
+
+function renderFeed(){
+  feedEl.innerHTML = '';
+
+  MOCK_VIDEOS.forEach((v) => {
+    const slide = document.createElement('div');
+    slide.className = 'slide';
+    slide.dataset.videoId = v.id;
+    slide.innerHTML = `
+      <video src="${v.src}" loop muted playsinline preload="metadata"></video>
+      <div class="progress-track"><div class="progress-fill"></div></div>
+      <div class="mute-hint"><svg viewBox="0 0 24 24" style="width:26px;height:26px;stroke:#fff"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg></div>
+      <div class="burst"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.2C.4 8.4 2 4.5 5.7 4c2-.3 3.9.7 5 2.3C11.8 4.7 13.7 3.7 15.7 4c3.7.5 5.3 4.4 3.7 7.8C19.5 16.4 12 21 12 21z"/></svg></div>
+
+      <div class="rail">
+        <div class="avatar-wrap">
+          <img src="${v.avatar}" alt="">
+          <div class="plus">+</div>
+        </div>
+        <button class="action like-btn${likedVideoIds.has(v.id) ? ' liked' : ''}">
+          <div class="icon">${heartIcon}</div>
+          <span class="count like-count">${fmt(v.likes)}</span>
+        </button>
+        <button class="action">
+          <div class="icon">${commentIcon}</div>
+          <span class="count">${fmt(v.comments)}</span>
+        </button>
+        <button class="action">
+          <div class="icon">${shareIcon}</div>
+          <span class="count">${fmt(v.shares)}</span>
+        </button>
+      </div>
+
+      <div class="meta">
+        <div class="handle"><img src="${v.avatar}" alt=""><span>@${v.user}</span></div>
+        <div class="caption">${v.caption}</div>
+        <div class="sound">🎵 ${v.sound}</div>
+      </div>
+    `;
+    feedEl.appendChild(slide);
+  });
+
+  if(!document.querySelector('.topbar')){
+    const topbar = document.createElement('div');
+    topbar.className = 'topbar';
+    topbar.style.position = 'fixed';
+    topbar.innerHTML = `
+      <button>Abonnements</button>
+      <button class="active">Pour toi</button>
+    `;
+    document.body.appendChild(topbar);
+
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'logout-btn';
+    logoutBtn.textContent = 'Déconnexion';
+    logoutBtn.addEventListener('click', async ()=>{
+      await sb.auth.signOut();
+      window.location.href = 'auth.html';
+    });
+    document.body.appendChild(logoutBtn);
+  }
+
+  wireUpFeed();
+}
+
+function wireUpFeed(){
+  const slides = document.querySelectorAll('.slide');
+  const videos = document.querySelectorAll('.slide video');
+
+  if(io) io.disconnect();
+  io = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      const vid = entry.target.querySelector('video');
+      if(entry.isIntersecting && entry.intersectionRatio > 0.6){
+        vid.play().catch(()=>{});
+      } else {
+        vid.pause();
+      }
+    });
+  }, { threshold: [0.6] });
+  slides.forEach(s => io.observe(s));
+
+  videos.forEach(vid=>{
+    const fill = vid.closest('.slide').querySelector('.progress-fill');
+    vid.addEventListener('timeupdate', ()=>{
+      if(vid.duration){
+        fill.style.width = (vid.currentTime / vid.duration * 100) + '%';
+      }
+    });
+  });
+
+  let lastTap = 0;
+  slides.forEach(slide=>{
+    const vid = slide.querySelector('video');
+    const hint = slide.querySelector('.mute-hint');
+    const burst = slide.querySelector('.burst');
+    const likeBtn = slide.querySelector('.like-btn');
+
+    slide.addEventListener('click', (e)=>{
+      if(e.target.closest('.rail') || e.target.closest('.bottomnav')) return;
+      const now = Date.now();
+      if(now - lastTap < 300){
+        if(!likeBtn.classList.contains('liked')) triggerLike(slide, likeBtn);
+        burst.classList.remove('play'); void burst.offsetWidth; burst.classList.add('play');
+      } else {
+        setTimeout(()=>{
+          if(Date.now() - lastTap >= 300){
+            vid.muted = !vid.muted;
+            hint.classList.remove('show'); void hint.offsetWidth; hint.classList.add('show');
+          }
+        }, 300);
+      }
+      lastTap = now;
+    });
+
+    likeBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      triggerLike(slide, likeBtn);
+    });
+  });
+
+  document.body.addEventListener('click', function unmuteFirst(){
+    if(videos[0]) videos[0].muted = false;
+    document.body.removeEventListener('click', unmuteFirst);
+  }, { once:true });
+}
+
+/* ---- Like / unlike réel, lié au compte connecté, persisté dans la table `likes` ---- */
+async function triggerLike(slide, btn){
+  const videoId = slide.dataset.videoId;
+  const countEl = btn.querySelector('.count');
+  const alreadyLiked = btn.classList.contains('liked');
+
+  // Mise à jour optimiste de l'UI
+  const rawCount = parseInt(countEl.dataset.raw || countEl.textContent.replace('k','')) || 0;
+  const nextCount = alreadyLiked ? Math.max(rawCount - 1, 0) : rawCount + 1;
+  countEl.dataset.raw = nextCount;
+  countEl.textContent = fmt(nextCount);
+  btn.classList.toggle('liked', !alreadyLiked);
+
+  if(alreadyLiked){
+    likedVideoIds.delete(videoId);
+    await sb.from('likes').delete().eq('user_id', currentUser.id).eq('video_id', videoId);
+  } else {
+    likedVideoIds.add(videoId);
+    const { error } = await sb.from('likes').insert({ user_id: currentUser.id, video_id: videoId });
+    if(error && error.code !== '23505'){ // ignore "déjà liké" en cas de double-clic rapide
+      console.error('Erreur like:', error);
+    }
+  }
+}
+
+(async function init(){
+  const ok = await requireAuth();
+  if(ok) loadVideos();
+})();
+</script>
+</body>
+</html>
