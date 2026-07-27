@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loop — Publier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0A0A0D; --ink: #F4F2ED; --ink-dim: rgba(244,242,237,0.68); --ink-faint: rgba(244,242,237,0.4);
+    --signal: #FF3D6E; --teal: #2DD4BF; --field: #17171C; --field-border: rgba(244,242,237,0.12);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; min-height:100%; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; }
+  body{ min-height:100dvh; display:flex; flex-direction:column; }
+
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:calc(env(safe-area-inset-top,14px) + 12px) 18px 12px;
+    border-bottom:1px solid var(--field-border);
+  }
+  header .back{ background:none; border:none; color:var(--ink-dim); font-size:22px; cursor:pointer; padding:4px 8px; }
+  header h1{ font-family:'Space Grotesk'; font-size:16px; font-weight:700; margin:0; }
+  header .spacer{ width:34px; }
+
+  main{ flex:1; padding:20px 18px calc(28px + env(safe-area-inset-bottom,0px)); max-width:440px; margin:0 auto; width:100%; }
+
+  .dropzone{
+    border:1.5px dashed var(--field-border); border-radius:16px; padding:36px 20px;
+    text-align:center; cursor:pointer; background:var(--field); transition:border-color .15s ease;
+  }
+  .dropzone:active{ border-color:var(--signal); }
+  .dropzone .icon{ font-size:34px; margin-bottom:10px; }
+  .dropzone .title{ font-weight:600; font-size:15px; }
+  .dropzone .sub{ color:var(--ink-faint); font-size:12.5px; margin-top:6px; }
+  input[type=file]{ display:none; }
+
+  .preview-wrap{ display:none; margin-top:18px; }
+  .preview-wrap.show{ display:block; }
+  .preview-frame{
+    position:relative; width:100%; aspect-ratio:9/16; max-height:52vh; margin:0 auto;
+    border-radius:16px; overflow:hidden; background:#000;
+  }
+  .preview-frame video{ width:100%; height:100%; object-fit:cover; }
+  .change-btn{
+    position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.55); color:#fff; border:none;
+    border-radius:20px; padding:6px 12px; font-size:12px; cursor:pointer;
+  }
+
+  .field{ margin-top:18px; }
+  label{ font-size:13px; color:var(--ink-dim); font-weight:500; display:block; margin-bottom:6px; }
+  textarea{
+    width:100%; padding:13px 14px; border-radius:11px; border:1px solid var(--field-border);
+    background:var(--field); color:var(--ink); font-family:'Inter'; font-size:14.5px; outline:none;
+    resize:none; min-height:70px; transition:border-color .15s ease;
+  }
+  textarea:focus{ border-color:var(--signal); }
+
+  .publish-btn{
+    width:100%; margin-top:22px; padding:15px; border:none; border-radius:12px; background:var(--signal);
+    color:#fff; font-family:'Space Grotesk'; font-weight:700; font-size:15px; cursor:pointer;
+  }
+  .publish-btn:disabled{ opacity:0.45; }
+
+  .status{
+    margin-top:16px; padding:13px 14px; border-radius:10px; font-size:13.5px; line-height:1.5; display:none;
+  }
+  .status.show{ display:block; }
+  .status.info{ background:rgba(45,212,191,0.1); color:var(--teal); border:1px solid rgba(45,212,191,0.22); }
+  .status.error{ background:rgba(255,61,110,0.12); color:#FF7A98; border:1px solid rgba(255,61,110,0.25); }
+
+  .progress-bar{
+    margin-top:10px; height:6px; border-radius:6px; background:rgba(244,242,237,0.12); overflow:hidden;
+  }
+  .progress-bar .fill{ height:100%; width:0%; background:var(--teal); transition:width .2s ease; }
+</style>
+</head>
+<body>
+<header>
+  <button class="back" onclick="window.location.href='feed.html'">←</button>
+  <h1>Publier une vidéo</h1>
+  <div class="spacer"></div>
+</header>
+
+<main>
+  <div class="dropzone" id="dropzone">
+    <div class="icon">🎬</div>
+    <div class="title">Choisir une vidéo</div>
+    <div class="sub">Max 60 secondes — sera compressée automatiquement avant l'envoi</div>
+  </div>
+  <input type="file" id="fileInput" accept="video/*">
+
+  <div class="preview-wrap" id="previewWrap">
+    <div class="preview-frame">
+      <video id="previewVideo" muted loop playsinline controls></video>
+      <button class="change-btn" id="changeBtn">Changer</button>
+    </div>
+
+    <div class="field">
+      <label for="caption">Légende</label>
+      <textarea id="caption" placeholder="Décris ta vidéo... #hashtags" maxlength="150"></textarea>
+    </div>
+
+    <button class="publish-btn" id="publishBtn">Compresser et publier</button>
+
+    <div class="status" id="status"></div>
+    <div class="progress-bar" id="progressBar" style="display:none;"><div class="fill" id="progressFill"></div></div>
+  </div>
+</main>
+
+<!-- éléments hors écran utilisés pour la compression -->
+<video id="srcVideo" playsinline muted style="display:none;"></video>
+<canvas id="workCanvas" style="display:none;"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://rvauipnxvhluvmyaqwty.supabase.co";
+const SUPABASE_KEY = "sb_publishable_dPzLd2Upx4_kpjh5HSb7xg_lLRXekKs";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+let selectedFile = null;
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const previewWrap = document.getElementById('previewWrap');
+const previewVideo = document.getElementById('previewVideo');
+const changeBtn = document.getElementById('changeBtn');
+const publishBtn = document.getElementById('publishBtn');
+const statusEl = document.getElementById('status');
+const progressBar = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+const srcVideo = document.getElementById('srcVideo');
+const workCanvas = document.getElementById('workCanvas');
+
+function showStatus(text, type){
+  statusEl.textContent = text;
+  statusEl.className = 'status show ' + type;
+}
+function clearStatus(){ statusEl.className = 'status'; }
+
+(async function init(){
+  const { data } = await sb.auth.getSession();
+  if(!data.session){ window.location.href = 'auth.html'; return; }
+  currentUser = data.session.user;
+
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+  currentProfile = profile;
+})();
+
+dropzone.addEventListener('click', ()=> fileInput.click());
+changeBtn.addEventListener('click', ()=> fileInput.click());
+
+fileInput.addEventListener('change', ()=>{
+  const file = fileInput.files[0];
+  if(!file) return;
+
+  const tempUrl = URL.createObjectURL(file);
+  const probe = document.createElement('video');
+  probe.preload = 'metadata';
+  probe.onloadedmetadata = ()=>{
+    if(probe.duration > 60){
+      showStatus('Cette vidéo dépasse 60 secondes. Choisis-en une plus courte pour ce MVP.', 'error');
+      URL.revokeObjectURL(tempUrl);
+      return;
+    }
+    clearStatus();
+    selectedFile = file;
+    previewVideo.src = tempUrl;
+    previewWrap.classList.add('show');
+    dropzone.style.display = 'none';
+  };
+  probe.src = tempUrl;
+});
+
+publishBtn.addEventListener('click', async ()=>{
+  if(!selectedFile) return;
+  publishBtn.disabled = true;
+  progressBar.style.display = 'block';
+  progressFill.style.width = '0%';
+  showStatus('Compression de la vidéo en cours...', 'info');
+
+  try{
+    const compressedBlob = await compressVideo(selectedFile, (pct)=>{
+      progressFill.style.width = (pct * 60) + '%'; // 0-60% pendant la compression
+    });
+
+    showStatus('Envoi vers le serveur...', 'info');
+    const path = `${currentUser.id}/${crypto.randomUUID()}.webm`;
+
+    const { error: uploadError } = await sb.storage.from('videos').upload(path, compressedBlob, {
+      contentType: 'video/webm',
+      upsert: false
+    });
+    progressFill.style.width = '85%';
+    if(uploadError) throw uploadError;
+
+    const { data: pub } = sb.storage.from('videos').getPublicUrl(path);
+
+    const { error: insertError } = await sb.from('videos').insert({
+      user_id: currentUser.id,
+      video_url: pub.publicUrl,
+      caption: document.getElementById('caption').value.trim(),
+      sound_label: 'Son original — ' + (currentProfile?.username || 'moi'),
+      display_name: currentProfile?.username || 'moi',
+      avatar_url: currentProfile?.avatar_url || null
+    });
+    if(insertError) throw insertError;
+
+    progressFill.style.width = '100%';
+    showStatus('Publié ! Retour au feed...', 'info');
+    setTimeout(()=> window.location.href = 'feed.html', 900);
+
+  } catch(err){
+    console.error(err);
+    showStatus("Échec de la publication : " + (err.message || 'erreur inconnue') + '. Réessaie.', 'error');
+    publishBtn.disabled = false;
+  }
+});
+
+/**
+ * Recompresse la vidéo côté navigateur :
+ * - redimensionne à une largeur max de 540px (format vertical conservé)
+ * - ré-encode en VP9/Opus (webm) à débit réduit via MediaRecorder
+ * Fonctionne sur Chrome Android / desktop. Sur Safari/iOS, captureStream()
+ * peut être indisponible — prévoir un repli "upload sans compression" plus tard si besoin.
+ */
+function compressVideo(file, onProgress){
+  return new Promise((resolve, reject)=>{
+    const url = URL.createObjectURL(file);
+    srcVideo.src = url;
+
+    srcVideo.onloadedmetadata = async ()=>{
+      const MAX_W = 540;
+      const scale = Math.min(1, MAX_W / srcVideo.videoWidth);
+      const w = Math.round(srcVideo.videoWidth * scale);
+      const h = Math.round(srcVideo.videoHeight * scale);
+      workCanvas.width = w;
+      workCanvas.height = h;
+      const ctx = workCanvas.getContext('2d');
+
+      if(typeof srcVideo.captureStream !== 'function'){
+        URL.revokeObjectURL(url);
+        reject(new Error("Ton navigateur ne supporte pas la compression vidéo intégrée."));
+        return;
+      }
+
+      const canvasStream = workCanvas.captureStream(30);
+      const fullStream = srcVideo.captureStream();
+      const audioTracks = fullStream.getAudioTracks();
+      audioTracks.forEach(t => canvasStream.addTrack(t));
+
+      let mimeType = 'video/webm;codecs=vp9,opus';
+      if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+      if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+      const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 2_000_000 });
+      const chunks = [];
+      recorder.ondataavailable = (e)=>{ if(e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = ()=>{
+        URL.revokeObjectURL(url);
+        resolve(new Blob(chunks, { type: 'video/webm' }));
+      };
+      recorder.onerror = (e)=> reject(e.error || new Error('Erreur MediaRecorder'));
+
+      let rafId;
+      function drawFrame(){
+        ctx.drawImage(srcVideo, 0, 0, w, h);
+        if(srcVideo.duration){ onProgress(Math.min(srcVideo.currentTime / srcVideo.duration, 1)); }
+        rafId = requestAnimationFrame(drawFrame);
+      }
+
+      srcVideo.onended = ()=>{
+        cancelAnimationFrame(rafId);
+        recorder.stop();
+      };
+
+      recorder.start();
+      srcVideo.currentTime = 0;
+      await srcVideo.play();
+      drawFrame();
+    };
+
+    srcVideo.onerror = ()=> reject(new Error('Impossible de lire ce fichier vidéo.'));
+  });
+}
+</script>
+</body>
+</html>

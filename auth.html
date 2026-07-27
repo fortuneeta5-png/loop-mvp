@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loop — Connexion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0A0A0D;
+    --ink: #F4F2ED;
+    --ink-dim: rgba(244,242,237,0.68);
+    --ink-faint: rgba(244,242,237,0.4);
+    --signal: #FF3D6E;
+    --teal: #2DD4BF;
+    --field: #17171C;
+    --field-border: rgba(244,242,237,0.12);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; min-height:100%; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; }
+  body{
+    min-height:100dvh; display:flex; flex-direction:column; justify-content:center;
+    padding:24px; padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));
+  }
+
+  .wrap{ width:100%; max-width:400px; margin:0 auto; }
+
+  .brand{ text-align:center; margin-bottom:40px; }
+  .brand .mark{
+    font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:32px;
+    letter-spacing:-0.02em;
+  }
+  .brand .mark span{ color:var(--signal); }
+  .brand p{ color:var(--ink-faint); font-size:14px; margin-top:6px; }
+
+  .tabs{
+    display:flex; background:var(--field); border-radius:12px; padding:4px; margin-bottom:28px;
+    border:1px solid var(--field-border);
+  }
+  .tabs button{
+    flex:1; padding:10px; border:none; background:none; border-radius:9px;
+    color:var(--ink-faint); font-family:'Inter'; font-weight:600; font-size:14px; cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+  }
+  .tabs button.active{ background:var(--ink); color:var(--bg); }
+
+  form{ display:flex; flex-direction:column; gap:14px; }
+  form.hidden{ display:none; }
+
+  label{ font-size:13px; color:var(--ink-dim); font-weight:500; display:block; margin-bottom:6px; }
+  .field{ margin-bottom:2px; }
+  input{
+    width:100%; padding:13px 14px; border-radius:11px; border:1px solid var(--field-border);
+    background:var(--field); color:var(--ink); font-family:'Inter'; font-size:15px; outline:none;
+    transition:border-color .15s ease;
+  }
+  input:focus{ border-color:var(--signal); }
+  input::placeholder{ color:var(--ink-faint); }
+
+  .pw-wrap{ position:relative; }
+  .pw-toggle{
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    background:none; border:none; cursor:pointer; padding:4px; font-size:16px; line-height:1;
+  }
+
+  button.submit{
+    margin-top:10px; padding:14px; border:none; border-radius:11px; background:var(--signal);
+    color:#fff; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px; cursor:pointer;
+    transition:opacity .15s ease, transform .1s ease;
+  }
+  button.submit:active{ transform:scale(0.98); }
+  button.submit:disabled{ opacity:0.5; cursor:default; }
+
+  .msg{
+    margin-top:16px; padding:12px 14px; border-radius:10px; font-size:13.5px; line-height:1.4;
+    display:none;
+  }
+  .msg.show{ display:block; }
+  .msg.error{ background:rgba(255,61,110,0.12); color:#FF7A98; border:1px solid rgba(255,61,110,0.25); }
+  .msg.success{ background:rgba(45,212,191,0.12); color:var(--teal); border:1px solid rgba(45,212,191,0.25); }
+
+  .hint{ text-align:center; color:var(--ink-faint); font-size:12.5px; margin-top:22px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="mark">Loop<span>.</span></div>
+    <p>Ton feed, tes vidéos, ta boucle.</p>
+  </div>
+
+  <div class="tabs">
+    <button id="tab-login" class="active">Se connecter</button>
+    <button id="tab-signup">Créer un compte</button>
+  </div>
+
+  <form id="form-login">
+    <div class="field">
+      <label for="login-email">Email</label>
+      <input id="login-email" type="email" placeholder="toi@exemple.com" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label for="login-password">Mot de passe</label>
+      <div class="pw-wrap">
+        <input id="login-password" type="password" placeholder="••••••••" required autocomplete="current-password">
+        <button type="button" class="pw-toggle" data-target="login-password">👁️</button>
+      </div>
+    </div>
+    <button type="submit" class="submit">Se connecter</button>
+  </form>
+
+  <form id="form-signup" class="hidden">
+    <div class="field">
+      <label for="signup-username">Nom d'utilisateur</label>
+      <input id="signup-username" type="text" placeholder="ex: aya_creates" required minlength="3" maxlength="24" pattern="[a-zA-Z0-9_.]+">
+    </div>
+    <div class="field">
+      <label for="signup-email">Email</label>
+      <input id="signup-email" type="email" placeholder="toi@exemple.com" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label for="signup-password">Mot de passe</label>
+      <div class="pw-wrap">
+        <input id="signup-password" type="password" placeholder="6 caractères minimum" required minlength="6" autocomplete="new-password">
+        <button type="button" class="pw-toggle" data-target="signup-password">👁️</button>
+      </div>
+    </div>
+    <button type="submit" class="submit">Créer mon compte</button>
+  </form>
+
+  <div id="msg" class="msg"></div>
+  <p class="hint">En continuant, tu acceptes que Loop est une version MVP en test.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://rvauipnxvhluvmyaqwty.supabase.co";
+const SUPABASE_KEY = "sb_publishable_dPzLd2Upx4_kpjh5HSb7xg_lLRXekKs";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const tabLogin = document.getElementById('tab-login');
+const tabSignup = document.getElementById('tab-signup');
+const formLogin = document.getElementById('form-login');
+const formSignup = document.getElementById('form-signup');
+const msg = document.getElementById('msg');
+
+function showMsg(text, type){
+  msg.textContent = text;
+  msg.className = 'msg show ' + type;
+}
+function clearMsg(){
+  msg.className = 'msg';
+}
+
+tabLogin.addEventListener('click', ()=>{
+  tabLogin.classList.add('active'); tabSignup.classList.remove('active');
+  formLogin.classList.remove('hidden'); formSignup.classList.add('hidden');
+  clearMsg();
+});
+tabSignup.addEventListener('click', ()=>{
+  tabSignup.classList.add('active'); tabLogin.classList.remove('active');
+  formSignup.classList.remove('hidden'); formLogin.classList.add('hidden');
+  clearMsg();
+});
+
+document.querySelectorAll('.pw-toggle').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const target = document.getElementById(btn.dataset.target);
+    const isPw = target.type === 'password';
+    target.type = isPw ? 'text' : 'password';
+    btn.textContent = isPw ? '🙈' : '👁️';
+  });
+});
+
+/* Redirige direct vers le feed si déjà connecté */
+sb.auth.getSession().then(({ data })=>{
+  if(data.session) window.location.href = 'feed.html';
+});
+
+formLogin.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  clearMsg();
+  const submitBtn = formLogin.querySelector('.submit');
+  submitBtn.disabled = true; submitBtn.textContent = 'Connexion...';
+
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+
+  submitBtn.disabled = false; submitBtn.textContent = 'Se connecter';
+
+  if(error){
+    showMsg(error.message.includes('Invalid') ? 'Email ou mot de passe incorrect.' : error.message, 'error');
+    return;
+  }
+  window.location.href = 'feed.html';
+});
+
+formSignup.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  clearMsg();
+  const submitBtn = formSignup.querySelector('.submit');
+  submitBtn.disabled = true; submitBtn.textContent = 'Création...';
+
+  const username = document.getElementById('signup-username').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+
+  const { data, error } = await sb.auth.signUp({
+    email, password,
+    options: { data: { username } }
+  });
+
+  submitBtn.disabled = false; submitBtn.textContent = 'Créer mon compte';
+
+  if(error){
+    let text = error.message;
+    if(error.message.includes('already registered') || error.message.includes('already exists')){
+      text = 'Un compte existe déjà avec cet email.';
+    } else if(error.message.toLowerCase().includes('database')){
+      text = "Ce nom d'utilisateur est peut-être déjà pris. Essaie un autre.";
+    }
+    showMsg(text, 'error');
+    return;
+  }
+
+  if(data.session){
+    // Confirmation email désactivée → session immédiate
+    window.location.href = 'feed.html';
+  } else {
+    showMsg('Compte créé ! Vérifie ton email pour confirmer avant de te connecter.', 'success');
+    tabLogin.click();
+  }
+});
+</script>
+</body>
+</html>
