@@ -259,6 +259,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let MOCK_VIDEOS = [];
 let currentUser = null;
 let likedVideoIds = new Set();
+let soundOn = false;
 
 async function requireAuth(){
   const { data } = await sb.auth.getSession();
@@ -309,6 +310,7 @@ async function loadVideos(){
 const heartIcon = `<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.2C.4 8.4 2 4.5 5.7 4c2-.3 3.9.7 5 2.3C11.8 4.7 13.7 3.7 15.7 4c3.7.5 5.3 4.4 3.7 7.8C19.5 16.4 12 21 12 21z"/></svg>`;
 const commentIcon = `<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H8l-5 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`;
 const shareIcon = `<svg viewBox="0 0 24 24"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v14"/></svg>`;
+const downloadIcon = `<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>`;
 
 function fmt(n){
   if(n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,'') + 'k';
@@ -347,6 +349,10 @@ function renderFeed(){
         <button class="action">
           <div class="icon">${shareIcon}</div>
           <span class="count">${fmt(v.shares)}</span>
+        </button>
+        <button class="action download-btn" data-src="${v.src}" data-user="${v.user}">
+          <div class="icon">${downloadIcon}</div>
+          <span class="count">Save</span>
         </button>
       </div>
 
@@ -392,11 +398,14 @@ function wireUpFeed(){
   const slides = document.querySelectorAll('.slide');
   const videos = document.querySelectorAll('.slide video');
 
+  videos.forEach(vid => { vid.muted = !soundOn; });
+
   if(io) io.disconnect();
   io = new IntersectionObserver((entries)=>{
     entries.forEach(entry=>{
       const vid = entry.target.querySelector('video');
       if(entry.isIntersecting && entry.intersectionRatio > 0.6){
+        vid.muted = !soundOn;
         vid.play().catch(()=>{});
       } else {
         vid.pause();
@@ -430,7 +439,8 @@ function wireUpFeed(){
       } else {
         setTimeout(()=>{
           if(Date.now() - lastTap >= 300){
-            vid.muted = !vid.muted;
+            soundOn = !soundOn;
+            videos.forEach(v => { v.muted = !soundOn; });
             hint.classList.remove('show'); void hint.offsetWidth; hint.classList.add('show');
           }
         }, 300);
@@ -448,10 +458,17 @@ function wireUpFeed(){
       e.stopPropagation();
       openComments(slide.dataset.videoId);
     });
+
+    const downloadBtn = slide.querySelector('.download-btn');
+    downloadBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      downloadWithWatermark(downloadBtn.dataset.src, downloadBtn.dataset.user, slide.dataset.videoId, downloadBtn);
+    });
   });
 
   document.body.addEventListener('click', function unmuteFirst(){
-    if(videos[0]) videos[0].muted = false;
+    soundOn = true;
+    videos.forEach(v => { v.muted = false; });
     document.body.removeEventListener('click', unmuteFirst);
   }, { once:true });
 }
@@ -575,6 +592,142 @@ async function submitComment(){
 }
 sendCommentBtn.addEventListener('click', submitComment);
 commentInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') submitComment(); });
+
+/* ---- Téléchargement avec filigrane Loop animé (icône qui rebondit + pseudo) ---- */
+const watermarkImg = new Image();
+watermarkImg.src = 'assets/watermark-mark.png';
+
+function downloadWithWatermark(src, username, videoId, btn){
+  const countEl = btn.querySelector('.count');
+  const originalLabel = countEl.textContent;
+  btn.disabled = true;
+  countEl.textContent = '...';
+
+  const exportVideo = document.createElement('video');
+  exportVideo.crossOrigin = 'anonymous';
+  exportVideo.muted = false;
+  exportVideo.playsInline = true;
+  exportVideo.src = src;
+
+  exportVideo.onloadedmetadata = async ()=>{
+    try{
+      const MAX_H = 960;
+      const scale = Math.min(1, MAX_H / exportVideo.videoHeight);
+      const w = Math.round(exportVideo.videoWidth * scale);
+      const h = Math.round(exportVideo.videoHeight * scale);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+
+      if(typeof exportVideo.captureStream !== 'function'){
+        throw new Error("Ton navigateur ne supporte pas le téléchargement avec filigrane.");
+      }
+
+      const canvasStream = canvas.captureStream(30);
+      const fullStream = exportVideo.captureStream();
+      fullStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+
+      let mimeType = 'video/webm;codecs=vp9,opus';
+      if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+      if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+      const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 3_000_000 });
+      const chunks = [];
+      recorder.ondataavailable = (e)=>{ if(e.data.size>0) chunks.push(e.data); };
+
+      const iconSize = w * 0.14;
+      let px = w * 0.15, py = h * 0.2;
+      let vx = w * 0.16, vy = h * 0.14; // vitesse en px/seconde
+      let lastT = null;
+
+      function drawWatermark(now){
+        if(lastT === null) lastT = now;
+        const dt = (now - lastT) / 1000;
+        lastT = now;
+
+        px += vx * dt; py += vy * dt;
+        if(px <= 0 || px + iconSize >= w){ vx *= -1; px = Math.max(0, Math.min(px, w-iconSize)); }
+        if(py <= 0 || py + iconSize >= h){ vy *= -1; py = Math.max(0, Math.min(py, h-iconSize)); }
+
+        ctx.drawImage(exportVideo, 0, 0, w, h);
+
+        if(watermarkImg.complete && watermarkImg.naturalWidth){
+          ctx.globalAlpha = 0.9;
+          const ratio = watermarkImg.naturalWidth / watermarkImg.naturalHeight;
+          const iw = iconSize, ih = iconSize / ratio;
+          ctx.drawImage(watermarkImg, px, py, iw, ih);
+          ctx.globalAlpha = 1;
+        }
+
+        // pseudo en filigrane bas de l'écran
+        const label = `@${username} · Loop`;
+        ctx.font = `${Math.round(h*0.032)}px sans-serif`;
+        const tw = ctx.measureText(label).width;
+        const padX = h*0.018, padY = h*0.012;
+        const bx = h*0.03, by = h - h*0.09;
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        roundRect(ctx, bx, by, tw+padX*2, h*0.045+padY, (h*0.045)/2);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label, bx+padX, by + h*0.045*0.72);
+      }
+
+      function roundRect(ctx,x,y,w,h,r){
+        ctx.beginPath();
+        ctx.moveTo(x+r,y);
+        ctx.arcTo(x+w,y,x+w,y+h,r);
+        ctx.arcTo(x+w,y+h,x,y+h,r);
+        ctx.arcTo(x,y+h,x,y,r);
+        ctx.arcTo(x,y,x+w,y,r);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      let rafId;
+      function loop(now){
+        drawWatermark(now);
+        rafId = requestAnimationFrame(loop);
+      }
+
+      recorder.onstop = ()=>{
+        cancelAnimationFrame(rafId);
+        const blob = new Blob(chunks, { type:'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `loop-${username}-${videoId}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=> URL.revokeObjectURL(url), 3000);
+        btn.disabled = false;
+        countEl.textContent = originalLabel;
+      };
+
+      exportVideo.onended = ()=> recorder.stop();
+
+      recorder.start();
+      exportVideo.currentTime = 0;
+      await exportVideo.play();
+      rafId = requestAnimationFrame(loop);
+
+    } catch(err){
+      console.error('Erreur export vidéo:', err);
+      const tainted = err.name === 'SecurityError' || /tainted|cross-origin/i.test(err.message||'');
+      alert(tainted
+        ? "Cette vidéo ne peut pas être téléchargée (vidéo de démonstration externe). Ça marchera avec les vraies vidéos publiées sur Loop."
+        : "Le téléchargement a échoué. Réessaie.");
+      btn.disabled = false;
+      countEl.textContent = originalLabel;
+    }
+  };
+
+  exportVideo.onerror = ()=>{
+    alert("Impossible de charger cette vidéo pour le téléchargement.");
+    btn.disabled = false;
+    countEl.textContent = originalLabel;
+  };
+}
 
 (async function init(){
   const ok = await requireAuth();
