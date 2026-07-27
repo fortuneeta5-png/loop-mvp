@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loop — Découvrir</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A0A0D">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Loop">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0A0D; --ink:#F4F2ED; --ink-dim:rgba(244,242,237,0.68); --ink-faint:rgba(244,242,237,0.4);
+    --signal:#FF8A1E; --teal:#2DD4BF; --field:#17171C; --field-border:rgba(244,242,237,0.12);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; min-height:100%; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; }
+  body{ padding-bottom:calc(70px + env(safe-area-inset-bottom,0px)); }
+
+  header{
+    padding:calc(env(safe-area-inset-top,14px) + 12px) 18px 12px;
+    border-bottom:1px solid var(--field-border);
+  }
+  header h1{ font-family:'Space Grotesk'; font-size:16px; font-weight:700; margin:0 0 12px; }
+
+  .search-row{ position:relative; }
+  .search-row input{
+    width:100%; padding:12px 14px 12px 40px; border-radius:12px; border:1px solid var(--field-border);
+    background:var(--field); color:var(--ink); font-family:'Inter'; font-size:14.5px; outline:none;
+  }
+  .search-row input:focus{ border-color:var(--signal); }
+  .search-row .icn{ position:absolute; left:13px; top:50%; transform:translateY(-50%); opacity:0.5; }
+  .search-row svg{ width:18px; height:18px; stroke:var(--ink); fill:none; stroke-width:2; }
+
+  .section-title{ font-size:12.5px; color:var(--ink-faint); font-weight:600; text-transform:uppercase; letter-spacing:0.04em; padding:16px 18px 8px; }
+
+  .user-row{ display:flex; align-items:center; gap:12px; padding:10px 18px; text-decoration:none; color:var(--ink); }
+  .user-row img{ width:44px; height:44px; border-radius:50%; object-fit:cover; background:var(--field); }
+  .user-row .uname{ font-weight:600; font-size:14px; }
+  .user-row .ubio{ font-size:12px; color:var(--ink-faint); margin-top:1px; }
+
+  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:2px; margin-top:6px; padding:0 2px; }
+  .grid a{ display:block; position:relative; aspect-ratio:9/16; background:#000; overflow:hidden; text-decoration:none; }
+  .grid video{ width:100%; height:100%; object-fit:cover; pointer-events:none; }
+  .grid .cap{
+    position:absolute; bottom:6px; left:6px; right:6px; color:#fff; font-size:11px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    text-shadow:0 1px 3px rgba(0,0,0,0.7);
+  }
+  .empty-state{ text-align:center; color:var(--ink-faint); padding:40px 24px; font-size:13.5px; }
+
+  .bottomnav{
+    position:fixed; left:0; right:0; bottom:0; z-index:10;
+    background:rgba(10,10,13,0.85); backdrop-filter:blur(14px);
+    border-top:1px solid var(--field-border);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 18px calc(10px + env(safe-area-inset-bottom,0px));
+  }
+  .navitem{ display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; color:var(--ink-faint); font-size:10.5px; font-weight:500; }
+  .navitem.active{ color:var(--ink); }
+  .navitem svg{ width:23px; height:23px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .upload-btn{ width:42px; height:32px; border-radius:9px; background:var(--signal); display:flex; align-items:center; justify-content:center; margin-top:-2px; }
+  .upload-btn svg{ stroke:var(--bg); width:20px; height:20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Découvrir</h1>
+  <div class="search-row">
+    <span class="icn"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+    <input type="text" id="searchInput" placeholder="Chercher un compte ou #hashtag">
+  </div>
+</header>
+
+<div id="results"></div>
+
+<nav class="bottomnav">
+  <button class="navitem" onclick="window.location.href='feed.html'">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+    Accueil
+  </button>
+  <button class="navitem active">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    Découvrir
+  </button>
+  <button class="navitem" onclick="window.location.href='upload.html'">
+    <div class="upload-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+  </button>
+  <button class="navitem">
+    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+    Boîte
+  </button>
+  <button class="navitem" onclick="window.location.href='profile.html'">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+    Profil
+  </button>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://rvauipnxvhluvmyaqwty.supabase.co";
+const SUPABASE_KEY = "sb_publishable_dPzLd2Upx4_kpjh5HSb7xg_lLRXekKs";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const searchInput = document.getElementById('searchInput');
+const results = document.getElementById('results');
+let debounceTimer;
+
+async function init(){
+  const { data } = await sb.auth.getSession();
+  if(!data.session){ window.location.href = 'auth.html'; return; }
+  loadTrending();
+}
+
+async function loadTrending(){
+  const { data: videos } = await sb
+    .from('videos')
+    .select('*')
+    .order('likes_count', { ascending:false })
+    .limit(18);
+
+  results.innerHTML = `<div class="section-title">Tendances</div>` + renderVideoGrid(videos || []);
+}
+
+function renderVideoGrid(videos){
+  if(videos.length === 0){
+    return `<div class="empty-state">Rien à afficher pour l'instant.</div>`;
+  }
+  return `<div class="grid">${videos.map(v => `
+    <a href="feed.html?v=${v.id}">
+      <video src="${v.video_url}#t=0.5" muted preload="metadata"></video>
+      <span class="cap">${(v.caption || '').replace(/</g,'&lt;')}</span>
+    </a>
+  `).join('')}</div>`;
+}
+
+async function runSearch(term){
+  if(!term.trim()){
+    loadTrending();
+    return;
+  }
+
+  const cleanTerm = term.trim().replace(/^#/, '');
+
+  const [{ data: users }, { data: videos }] = await Promise.all([
+    sb.from('profiles').select('*').ilike('username', `%${cleanTerm}%`).limit(10),
+    sb.from('videos').select('*').ilike('caption', `%${term.trim()}%`).order('likes_count', { ascending:false }).limit(18)
+  ]);
+
+  let html = '';
+
+  html += `<div class="section-title">Comptes</div>`;
+  if(users && users.length){
+    html += users.map(u => `
+      <a class="user-row" href="profile.html?id=${u.id}">
+        <img src="${u.avatar_url || 'https://i.pravatar.cc/100?u=' + u.id}" alt="">
+        <div>
+          <div class="uname">@${u.username}</div>
+          <div class="ubio">${(u.bio || '').replace(/</g,'&lt;').slice(0,60)}</div>
+        </div>
+      </a>
+    `).join('');
+  } else {
+    html += `<div class="empty-state" style="padding:16px 18px;text-align:left;">Aucun compte trouvé.</div>`;
+  }
+
+  html += `<div class="section-title">Vidéos</div>`;
+  html += renderVideoGrid(videos || []);
+
+  results.innerHTML = html;
+}
+
+searchInput.addEventListener('input', ()=>{
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(()=> runSearch(searchInput.value), 350);
+});
+
+init();
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>

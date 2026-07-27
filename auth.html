@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Loop — Connexion</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A0A0D">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Loop">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,7 +20,7 @@
     --ink: #F4F2ED;
     --ink-dim: rgba(244,242,237,0.68);
     --ink-faint: rgba(244,242,237,0.4);
-    --signal: #FF3D6E;
+    --signal: #FF8A1E;
     --teal: #2DD4BF;
     --field: #17171C;
     --field-border: rgba(244,242,237,0.12);
@@ -87,7 +94,7 @@
 <body>
 <div class="wrap">
   <div class="brand">
-    <div class="mark">Loop<span>.</span></div>
+    <img src="logo.png" alt="Loop" style="width:100%;max-width:280px;height:auto;display:block;margin:0 auto;">
     <p>Ton feed, tes vidéos, ta boucle.</p>
   </div>
 
@@ -235,6 +242,13 @@ formSignup.addEventListener('submit', async (e)=>{
     tabLogin.click();
   }
 });
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>

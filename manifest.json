@@ -1,0 +1,16 @@
+{
+  "name": "Loop",
+  "short_name": "Loop",
+  "description": "Ton feed, tes vidéos, ta boucle.",
+  "start_url": "/loop-mvp/feed.html",
+  "scope": "/loop-mvp/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0A0D",
+  "theme_color": "#0A0A0D",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

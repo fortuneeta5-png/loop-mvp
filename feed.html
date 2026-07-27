@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Loop — Feed</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A0A0D">
+<link rel="icon" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Loop">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,7 +20,7 @@
     --ink: #F4F2ED;
     --ink-dim: rgba(244,242,237,0.68);
     --ink-faint: rgba(244,242,237,0.4);
-    --signal: #FF3D6E;
+    --signal: #FF8A1E;
     --teal: #2DD4BF;
     --panel: rgba(20,20,24,0.55);
   }
@@ -108,7 +115,7 @@
     backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center;
     transition:transform .15s ease;
   }
-  .action.liked .icon{ background:rgba(255,61,110,0.18); }
+  .action.liked .icon{ background:rgba(255,138,30,0.18); }
   .action.liked .icon svg{ fill:var(--signal); stroke:var(--signal); }
   .action:active .icon{ transform:scale(0.88); }
   .action .count{ font-size:12.5px; color:var(--ink-dim); }
@@ -139,6 +146,44 @@
   .mute-hint.show{ animation:hintFade 0.9s ease forwards; }
   @keyframes hintFade{ 0%{opacity:0} 15%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
 
+  /* ---------- Commentaires ---------- */
+  .comments-overlay{
+    position:fixed; inset:0; z-index:30; background:rgba(0,0,0,0.55);
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .comments-overlay.show{ display:flex; }
+  .comments-sheet{
+    width:100%; max-width:480px; height:72dvh; background:#111116; border-radius:18px 18px 0 0;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  .comments-head{
+    display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+    border-bottom:1px solid rgba(244,242,237,0.08); font-family:'Space Grotesk'; font-weight:700; font-size:14.5px;
+  }
+  .comments-head button{ background:none; border:none; color:var(--ink-dim); font-size:20px; cursor:pointer; }
+  .comments-list{ flex:1; overflow-y:auto; padding:12px 16px; }
+  .comment-row{ display:flex; gap:10px; margin-bottom:16px; }
+  .comment-row img{ width:32px; height:32px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#222; }
+  .comment-body .handle{ font-size:12.5px; font-weight:600; color:var(--ink-dim); margin:0 0 2px; }
+  .comment-body .text{ font-size:14px; line-height:1.4; }
+  .comment-body .time{ font-size:11px; color:var(--ink-faint); margin-top:3px; }
+  .comments-empty{ text-align:center; color:var(--ink-faint); font-size:13.5px; padding:30px 20px; }
+  .comments-input-row{
+    display:flex; gap:10px; align-items:center; padding:12px 16px;
+    padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));
+    border-top:1px solid rgba(244,242,237,0.08);
+  }
+  .comments-input-row input{
+    flex:1; padding:11px 14px; border-radius:20px; border:1px solid rgba(244,242,237,0.14);
+    background:#1a1a20; color:var(--ink); font-family:'Inter'; font-size:14px; outline:none;
+  }
+  .comments-input-row input:focus{ border-color:var(--signal); }
+  .comments-input-row button{
+    background:var(--signal); border:none; color:#fff; font-weight:700; font-size:13px;
+    padding:10px 16px; border-radius:20px; cursor:pointer; flex-shrink:0;
+  }
+  .comments-input-row button:disabled{ opacity:0.5; }
+
   /* ---------- Bottom nav ---------- */
   .bottomnav{
     position:fixed; left:0; right:0; bottom:0; z-index:10;
@@ -168,12 +213,26 @@
 
 <div class="feed" id="feed"></div>
 
+<div class="comments-overlay" id="commentsOverlay">
+  <div class="comments-sheet">
+    <div class="comments-head">
+      <span id="commentsCount">Commentaires</span>
+      <button id="closeComments">✕</button>
+    </div>
+    <div class="comments-list" id="commentsList"></div>
+    <div class="comments-input-row">
+      <input type="text" id="commentInput" placeholder="Ajoute un commentaire..." maxlength="300">
+      <button id="sendComment">Publier</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottomnav">
   <button class="navitem active">
     <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
     Accueil
   </button>
-  <button class="navitem">
+  <button class="navitem" onclick="window.location.href='discover.html'">
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
     Découvrir
   </button>
@@ -184,7 +243,7 @@
     <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
     Boîte
   </button>
-  <button class="navitem">
+  <button class="navitem" onclick="window.location.href='profile.html'">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
     Profil
   </button>
@@ -225,6 +284,7 @@ async function loadVideos(){
 
   MOCK_VIDEOS = data.map(v => ({
     id: v.id,
+    userId: v.user_id,
     src: v.video_url,
     user: v.display_name || 'utilisateur',
     avatar: v.avatar_url || 'https://i.pravatar.cc/100',
@@ -272,17 +332,17 @@ function renderFeed(){
       <div class="burst"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-10-9.2C.4 8.4 2 4.5 5.7 4c2-.3 3.9.7 5 2.3C11.8 4.7 13.7 3.7 15.7 4c3.7.5 5.3 4.4 3.7 7.8C19.5 16.4 12 21 12 21z"/></svg></div>
 
       <div class="rail">
-        <div class="avatar-wrap">
+        <div class="avatar-wrap"${v.userId ? ` style="cursor:pointer" onclick="window.location.href='profile.html?id=${v.userId}'"` : ''}>
           <img src="${v.avatar}" alt="">
           <div class="plus">+</div>
         </div>
         <button class="action like-btn${likedVideoIds.has(v.id) ? ' liked' : ''}">
           <div class="icon">${heartIcon}</div>
-          <span class="count like-count">${fmt(v.likes)}</span>
+          <span class="count like-count" data-raw="${v.likes}">${fmt(v.likes)}</span>
         </button>
-        <button class="action">
+        <button class="action comment-btn">
           <div class="icon">${commentIcon}</div>
-          <span class="count">${fmt(v.comments)}</span>
+          <span class="count comment-count" data-raw="${v.comments}">${fmt(v.comments)}</span>
         </button>
         <button class="action">
           <div class="icon">${shareIcon}</div>
@@ -291,7 +351,7 @@ function renderFeed(){
       </div>
 
       <div class="meta">
-        <div class="handle"><img src="${v.avatar}" alt=""><span>@${v.user}</span></div>
+        <div class="handle"${v.userId ? ` style="cursor:pointer" onclick="window.location.href='profile.html?id=${v.userId}'"` : ''}><img src="${v.avatar}" alt=""><span>@${v.user}</span></div>
         <div class="caption">${v.caption}</div>
         <div class="sound">🎵 ${v.sound}</div>
       </div>
@@ -320,6 +380,12 @@ function renderFeed(){
   }
 
   wireUpFeed();
+
+  const targetId = new URLSearchParams(window.location.search).get('v');
+  if(targetId){
+    const targetSlide = document.querySelector(`.slide[data-video-id="${targetId}"]`);
+    if(targetSlide) targetSlide.scrollIntoView({ behavior:'instant', block:'start' });
+  }
 }
 
 function wireUpFeed(){
@@ -376,6 +442,12 @@ function wireUpFeed(){
       e.stopPropagation();
       triggerLike(slide, likeBtn);
     });
+
+    const commentBtn = slide.querySelector('.comment-btn');
+    commentBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openComments(slide.dataset.videoId);
+    });
   });
 
   document.body.addEventListener('click', function unmuteFirst(){
@@ -409,10 +481,112 @@ async function triggerLike(slide, btn){
   }
 }
 
+/* ---- Commentaires : chargement + publication en direct ---- */
+const commentsOverlay = document.getElementById('commentsOverlay');
+const commentsList = document.getElementById('commentsList');
+const commentsCountEl = document.getElementById('commentsCount');
+const commentInput = document.getElementById('commentInput');
+const sendCommentBtn = document.getElementById('sendComment');
+let activeVideoId = null;
+
+function timeAgo(dateStr){
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if(diff < 60) return "à l'instant";
+  if(diff < 3600) return Math.floor(diff/60) + 'min';
+  if(diff < 86400) return Math.floor(diff/3600) + 'h';
+  return Math.floor(diff/86400) + 'j';
+}
+
+async function openComments(videoId){
+  activeVideoId = videoId;
+  commentsOverlay.classList.add('show');
+  commentsList.innerHTML = '<div class="comments-empty">Chargement...</div>';
+  await loadComments(videoId);
+}
+
+async function loadComments(videoId){
+  const { data, error } = await sb
+    .from('comments')
+    .select('id, content, created_at, profiles(username, avatar_url)')
+    .eq('video_id', videoId)
+    .order('created_at', { ascending:true });
+
+  if(error){
+    commentsList.innerHTML = '<div class="comments-empty">Impossible de charger les commentaires.</div>';
+    return;
+  }
+
+  commentsCountEl.textContent = data.length + (data.length > 1 ? ' commentaires' : ' commentaire');
+
+  if(data.length === 0){
+    commentsList.innerHTML = '<div class="comments-empty">Aucun commentaire pour l\'instant. Sois le premier à réagir.</div>';
+    return;
+  }
+
+  commentsList.innerHTML = data.map(c => `
+    <div class="comment-row">
+      <img src="${c.profiles?.avatar_url || 'https://i.pravatar.cc/64?u=' + c.id}" alt="">
+      <div class="comment-body">
+        <p class="handle">@${c.profiles?.username || 'utilisateur'}</p>
+        <p class="text">${escapeHtml(c.content)}</p>
+        <p class="time">${timeAgo(c.created_at)}</p>
+      </div>
+    </div>
+  `).join('');
+  commentsList.scrollTop = commentsList.scrollHeight;
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+document.getElementById('closeComments').addEventListener('click', ()=>{
+  commentsOverlay.classList.remove('show');
+  activeVideoId = null;
+});
+
+async function submitComment(){
+  const text = commentInput.value.trim();
+  if(!text || !activeVideoId || !currentUser) return;
+  sendCommentBtn.disabled = true;
+
+  const { error } = await sb.from('comments').insert({
+    video_id: activeVideoId,
+    user_id: currentUser.id,
+    content: text
+  });
+
+  sendCommentBtn.disabled = false;
+  if(error){ console.error('Erreur commentaire:', error); return; }
+
+  commentInput.value = '';
+  await loadComments(activeVideoId);
+
+  // Met à jour le compteur affiché sous l'icône commentaire dans le feed
+  const slide = document.querySelector(`.slide[data-video-id="${activeVideoId}"]`);
+  if(slide){
+    const countEl = slide.querySelector('.comment-count');
+    const current = parseInt(countEl.dataset.raw || countEl.textContent) || 0;
+    countEl.dataset.raw = current + 1;
+    countEl.textContent = fmt(current + 1);
+  }
+}
+sendCommentBtn.addEventListener('click', submitComment);
+commentInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') submitComment(); });
+
 (async function init(){
   const ok = await requireAuth();
   if(ok) loadVideos();
 })();
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
