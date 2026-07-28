@@ -462,7 +462,15 @@ function wireUpFeed(){
     const downloadBtn = slide.querySelector('.download-btn');
     downloadBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
-      downloadWithWatermark(downloadBtn.dataset.src, downloadBtn.dataset.user, slide.dataset.videoId, downloadBtn);
+      e.preventDefault();
+      downloadBtn.style.transform = 'scale(0.85)';
+      setTimeout(()=>{ downloadBtn.style.transform = ''; }, 150);
+      try{
+        downloadWithWatermark(downloadBtn.dataset.src, downloadBtn.dataset.user, slide.dataset.videoId, downloadBtn);
+      } catch(err){
+        console.error(err);
+        alert('Erreur: ' + err.message);
+      }
     });
   });
 
@@ -597,144 +605,139 @@ commentInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') submitComm
 const watermarkImg = new Image();
 watermarkImg.src = 'assets/watermark-mark.png';
 
-function downloadWithWatermark(src, username, videoId, btn){
+async function downloadWithWatermark(src, username, videoId, btn){
   const countEl = btn.querySelector('.count');
   const originalLabel = countEl.textContent;
   btn.disabled = true;
   countEl.textContent = '...';
 
-  const exportVideo = document.createElement('video');
-  exportVideo.crossOrigin = 'anonymous';
-  exportVideo.muted = true; // reste muet pour éviter le blocage autoplay — l'audio est quand même capturé via captureStream()
-  exportVideo.playsInline = true;
-  exportVideo.src = src;
+  let blobUrl = null;
 
-  const safetyTimeout = setTimeout(()=>{
-    alert("Le chargement de la vidéo prend trop de temps ou a échoué. Vérifie ta connexion et réessaie.");
-    btn.disabled = false;
-    countEl.textContent = originalLabel;
-  }, 12000);
+  try{
+    const resp = await fetch(src);
+    if(!resp.ok) throw new Error('http_' + resp.status);
+    const sourceBlob = await resp.blob();
+    blobUrl = URL.createObjectURL(sourceBlob);
 
-  exportVideo.onloadedmetadata = async ()=>{
-    clearTimeout(safetyTimeout);
-    try{
-      const MAX_H = 960;
-      const scale = Math.min(1, MAX_H / exportVideo.videoHeight);
-      const w = Math.round(exportVideo.videoWidth * scale);
-      const h = Math.round(exportVideo.videoHeight * scale);
+    const exportVideo = document.createElement('video');
+    exportVideo.muted = true;
+    exportVideo.playsInline = true;
+    exportVideo.src = blobUrl;
 
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
+    await new Promise((resolve, reject)=>{
+      exportVideo.onloadedmetadata = resolve;
+      exportVideo.onerror = ()=> reject(new Error('video_decode_failed'));
+    });
 
-      if(typeof exportVideo.captureStream !== 'function'){
-        throw new Error("Ton navigateur ne supporte pas le téléchargement avec filigrane.");
-      }
-
-      const canvasStream = canvas.captureStream(30);
-      const fullStream = exportVideo.captureStream();
-      fullStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
-
-      let mimeType = 'video/webm;codecs=vp9,opus';
-      if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
-      if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
-
-      const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 3_000_000 });
-      const chunks = [];
-      recorder.ondataavailable = (e)=>{ if(e.data.size>0) chunks.push(e.data); };
-
-      const iconSize = w * 0.14;
-      let px = w * 0.15, py = h * 0.2;
-      let vx = w * 0.16, vy = h * 0.14; // vitesse en px/seconde
-      let lastT = null;
-
-      function drawWatermark(now){
-        if(lastT === null) lastT = now;
-        const dt = (now - lastT) / 1000;
-        lastT = now;
-
-        px += vx * dt; py += vy * dt;
-        if(px <= 0 || px + iconSize >= w){ vx *= -1; px = Math.max(0, Math.min(px, w-iconSize)); }
-        if(py <= 0 || py + iconSize >= h){ vy *= -1; py = Math.max(0, Math.min(py, h-iconSize)); }
-
-        ctx.drawImage(exportVideo, 0, 0, w, h);
-
-        if(watermarkImg.complete && watermarkImg.naturalWidth){
-          ctx.globalAlpha = 0.9;
-          const ratio = watermarkImg.naturalWidth / watermarkImg.naturalHeight;
-          const iw = iconSize, ih = iconSize / ratio;
-          ctx.drawImage(watermarkImg, px, py, iw, ih);
-          ctx.globalAlpha = 1;
-        }
-
-        // pseudo en filigrane bas de l'écran
-        const label = `@${username} · Loop`;
-        ctx.font = `${Math.round(h*0.032)}px sans-serif`;
-        const tw = ctx.measureText(label).width;
-        const padX = h*0.018, padY = h*0.012;
-        const bx = h*0.03, by = h - h*0.09;
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
-        roundRect(ctx, bx, by, tw+padX*2, h*0.045+padY, (h*0.045)/2);
-        ctx.fillStyle = '#fff';
-        ctx.fillText(label, bx+padX, by + h*0.045*0.72);
-      }
-
-      function roundRect(ctx,x,y,w,h,r){
-        ctx.beginPath();
-        ctx.moveTo(x+r,y);
-        ctx.arcTo(x+w,y,x+w,y+h,r);
-        ctx.arcTo(x+w,y+h,x,y+h,r);
-        ctx.arcTo(x,y+h,x,y,r);
-        ctx.arcTo(x,y,x+w,y,r);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      let rafId;
-      function loop(now){
-        drawWatermark(now);
-        rafId = requestAnimationFrame(loop);
-      }
-
-      recorder.onstop = ()=>{
-        cancelAnimationFrame(rafId);
-        const blob = new Blob(chunks, { type:'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `loop-${username}-${videoId}.webm`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(()=> URL.revokeObjectURL(url), 3000);
-        btn.disabled = false;
-        countEl.textContent = originalLabel;
-      };
-
-      exportVideo.onended = ()=> recorder.stop();
-
-      recorder.start();
-      exportVideo.currentTime = 0;
-      await exportVideo.play();
-      rafId = requestAnimationFrame(loop);
-
-    } catch(err){
-      console.error('Erreur export vidéo:', err);
-      const tainted = err.name === 'SecurityError' || /tainted|cross-origin/i.test(err.message||'');
-      alert(tainted
-        ? "Cette vidéo ne peut pas être téléchargée (vidéo de démonstration externe). Ça marchera avec les vraies vidéos publiées sur Loop."
-        : "Le téléchargement a échoué. Réessaie.");
-      btn.disabled = false;
-      countEl.textContent = originalLabel;
+    if(typeof exportVideo.captureStream !== 'function'){
+      throw new Error('captureStream_unsupported');
     }
-  };
 
-  exportVideo.onerror = ()=>{
-    clearTimeout(safetyTimeout);
-    alert("Impossible de charger cette vidéo pour le téléchargement.");
+    const MAX_H = 960;
+    const scale = Math.min(1, MAX_H / exportVideo.videoHeight);
+    const w = Math.round(exportVideo.videoWidth * scale);
+    const h = Math.round(exportVideo.videoHeight * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    const canvasStream = canvas.captureStream(30);
+    const fullStream = exportVideo.captureStream();
+    fullStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+
+    let mimeType = 'video/webm;codecs=vp9,opus';
+    if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+    if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+    const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 3_000_000 });
+    const chunks = [];
+    recorder.ondataavailable = (e)=>{ if(e.data.size>0) chunks.push(e.data); };
+
+    const iconSize = w * 0.14;
+    let px = w * 0.15, py = h * 0.2;
+    let vx = w * 0.16, vy = h * 0.14;
+    let lastT = null;
+    let rafId;
+
+    function roundRect(c,x,y,ww,hh,r){
+      c.beginPath();
+      c.moveTo(x+r,y);
+      c.arcTo(x+ww,y,x+ww,y+hh,r);
+      c.arcTo(x+ww,y+hh,x,y+hh,r);
+      c.arcTo(x,y+hh,x,y,r);
+      c.arcTo(x,y,x+ww,y,r);
+      c.closePath();
+      c.fill();
+    }
+
+    function drawFrame(now){
+      if(lastT === null) lastT = now;
+      const dt = (now - lastT) / 1000;
+      lastT = now;
+
+      px += vx * dt; py += vy * dt;
+      if(px <= 0 || px + iconSize >= w){ vx *= -1; px = Math.max(0, Math.min(px, w-iconSize)); }
+      if(py <= 0 || py + iconSize >= h){ vy *= -1; py = Math.max(0, Math.min(py, h-iconSize)); }
+
+      ctx.drawImage(exportVideo, 0, 0, w, h);
+
+      if(watermarkImg.complete && watermarkImg.naturalWidth){
+        ctx.globalAlpha = 0.9;
+        const ratio = watermarkImg.naturalWidth / watermarkImg.naturalHeight;
+        ctx.drawImage(watermarkImg, px, py, iconSize, iconSize/ratio);
+        ctx.globalAlpha = 1;
+      }
+
+      const label = `@${username} · Loop`;
+      ctx.font = `${Math.round(h*0.032)}px sans-serif`;
+      const tw = ctx.measureText(label).width;
+      const padX = h*0.018, padY = h*0.012;
+      const bx = h*0.03, by = h - h*0.09;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      roundRect(ctx, bx, by, tw+padX*2, h*0.045+padY, (h*0.045)/2);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, bx+padX, by + h*0.045*0.72);
+
+      rafId = requestAnimationFrame(drawFrame);
+    }
+
+    const stopPromise = new Promise((resolve)=>{
+      recorder.onstop = resolve;
+    });
+
+    exportVideo.onended = ()=>{ cancelAnimationFrame(rafId); recorder.stop(); };
+
+    recorder.start();
+    exportVideo.currentTime = 0;
+    await exportVideo.play();
+    rafId = requestAnimationFrame(drawFrame);
+
+    await stopPromise;
+
+    const outBlob = new Blob(chunks, { type:'video/webm' });
+    const outUrl = URL.createObjectURL(outBlob);
+    const a = document.createElement('a');
+    a.href = outUrl;
+    a.download = `loop-${username}-${videoId}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=> URL.revokeObjectURL(outUrl), 3000);
+
+  } catch(err){
+    console.error('Erreur téléchargement:', err);
+    let msg = "Le téléchargement a échoué. Réessaie.";
+    if(err.message === 'captureStream_unsupported') msg = "Ton navigateur ne supporte pas cette fonctionnalité.";
+    else if(/http_/.test(err.message)) msg = "La vidéo source est introuvable sur le serveur.";
+    else if(err.message === 'video_decode_failed') msg = "Ce format vidéo n'a pas pu être lu.";
+    else if(err.name === 'TypeError') msg = "Impossible d'accéder à cette vidéo (problème réseau ou de permissions serveur).";
+    alert(msg);
+  } finally {
+    if(blobUrl) URL.revokeObjectURL(blobUrl);
     btn.disabled = false;
     countEl.textContent = originalLabel;
-  };
+  }
 }
 
 (async function init(){

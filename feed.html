@@ -462,7 +462,15 @@ function wireUpFeed(){
     const downloadBtn = slide.querySelector('.download-btn');
     downloadBtn.addEventListener('click', (e)=>{
       e.stopPropagation();
-      downloadWithWatermark(downloadBtn.dataset.src, downloadBtn.dataset.user, slide.dataset.videoId, downloadBtn);
+      e.preventDefault();
+      downloadBtn.style.transform = 'scale(0.85)';
+      setTimeout(()=>{ downloadBtn.style.transform = ''; }, 150);
+      try{
+        downloadWithWatermark(downloadBtn.dataset.src, downloadBtn.dataset.user, slide.dataset.videoId, downloadBtn);
+      } catch(err){
+        console.error(err);
+        alert('Erreur: ' + err.message);
+      }
     });
   });
 
@@ -488,4 +496,261 @@ async function triggerLike(slide, btn){
 
   if(alreadyLiked){
     likedVideoIds.delete(videoId);
-    await sb.from('likes').delete().eq('user_id', currentUser.id).eq('vide
+    await sb.from('likes').delete().eq('user_id', currentUser.id).eq('video_id', videoId);
+  } else {
+    likedVideoIds.add(videoId);
+    const { error } = await sb.from('likes').insert({ user_id: currentUser.id, video_id: videoId });
+    if(error && error.code !== '23505'){ // ignore "déjà liké" en cas de double-clic rapide
+      console.error('Erreur like:', error);
+    }
+  }
+}
+
+/* ---- Commentaires : chargement + publication en direct ---- */
+const commentsOverlay = document.getElementById('commentsOverlay');
+const commentsList = document.getElementById('commentsList');
+const commentsCountEl = document.getElementById('commentsCount');
+const commentInput = document.getElementById('commentInput');
+const sendCommentBtn = document.getElementById('sendComment');
+let activeVideoId = null;
+
+function timeAgo(dateStr){
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if(diff < 60) return "à l'instant";
+  if(diff < 3600) return Math.floor(diff/60) + 'min';
+  if(diff < 86400) return Math.floor(diff/3600) + 'h';
+  return Math.floor(diff/86400) + 'j';
+}
+
+async function openComments(videoId){
+  activeVideoId = videoId;
+  commentsOverlay.classList.add('show');
+  commentsList.innerHTML = '<div class="comments-empty">Chargement...</div>';
+  await loadComments(videoId);
+}
+
+async function loadComments(videoId){
+  const { data, error } = await sb
+    .from('comments')
+    .select('id, content, created_at, profiles(username, avatar_url)')
+    .eq('video_id', videoId)
+    .order('created_at', { ascending:true });
+
+  if(error){
+    commentsList.innerHTML = '<div class="comments-empty">Impossible de charger les commentaires.</div>';
+    return;
+  }
+
+  commentsCountEl.textContent = data.length + (data.length > 1 ? ' commentaires' : ' commentaire');
+
+  if(data.length === 0){
+    commentsList.innerHTML = '<div class="comments-empty">Aucun commentaire pour l\'instant. Sois le premier à réagir.</div>';
+    return;
+  }
+
+  commentsList.innerHTML = data.map(c => `
+    <div class="comment-row">
+      <img src="${c.profiles?.avatar_url || 'https://i.pravatar.cc/64?u=' + c.id}" alt="">
+      <div class="comment-body">
+        <p class="handle">@${c.profiles?.username || 'utilisateur'}</p>
+        <p class="text">${escapeHtml(c.content)}</p>
+        <p class="time">${timeAgo(c.created_at)}</p>
+      </div>
+    </div>
+  `).join('');
+  commentsList.scrollTop = commentsList.scrollHeight;
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+document.getElementById('closeComments').addEventListener('click', ()=>{
+  commentsOverlay.classList.remove('show');
+  activeVideoId = null;
+});
+
+async function submitComment(){
+  const text = commentInput.value.trim();
+  if(!text || !activeVideoId || !currentUser) return;
+  sendCommentBtn.disabled = true;
+
+  const { error } = await sb.from('comments').insert({
+    video_id: activeVideoId,
+    user_id: currentUser.id,
+    content: text
+  });
+
+  sendCommentBtn.disabled = false;
+  if(error){ console.error('Erreur commentaire:', error); return; }
+
+  commentInput.value = '';
+  await loadComments(activeVideoId);
+
+  // Met à jour le compteur affiché sous l'icône commentaire dans le feed
+  const slide = document.querySelector(`.slide[data-video-id="${activeVideoId}"]`);
+  if(slide){
+    const countEl = slide.querySelector('.comment-count');
+    const current = parseInt(countEl.dataset.raw || countEl.textContent) || 0;
+    countEl.dataset.raw = current + 1;
+    countEl.textContent = fmt(current + 1);
+  }
+}
+sendCommentBtn.addEventListener('click', submitComment);
+commentInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') submitComment(); });
+
+/* ---- Téléchargement avec filigrane Loop animé (icône qui rebondit + pseudo) ---- */
+const watermarkImg = new Image();
+watermarkImg.src = 'assets/watermark-mark.png';
+
+async function downloadWithWatermark(src, username, videoId, btn){
+  const countEl = btn.querySelector('.count');
+  const originalLabel = countEl.textContent;
+  btn.disabled = true;
+  countEl.textContent = '...';
+
+  let blobUrl = null;
+
+  try{
+    const resp = await fetch(src);
+    if(!resp.ok) throw new Error('http_' + resp.status);
+    const sourceBlob = await resp.blob();
+    blobUrl = URL.createObjectURL(sourceBlob);
+
+    const exportVideo = document.createElement('video');
+    exportVideo.muted = true;
+    exportVideo.playsInline = true;
+    exportVideo.src = blobUrl;
+
+    await new Promise((resolve, reject)=>{
+      exportVideo.onloadedmetadata = resolve;
+      exportVideo.onerror = ()=> reject(new Error('video_decode_failed'));
+    });
+
+    if(typeof exportVideo.captureStream !== 'function'){
+      throw new Error('captureStream_unsupported');
+    }
+
+    const MAX_H = 960;
+    const scale = Math.min(1, MAX_H / exportVideo.videoHeight);
+    const w = Math.round(exportVideo.videoWidth * scale);
+    const h = Math.round(exportVideo.videoHeight * scale);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+
+    const canvasStream = canvas.captureStream(30);
+    const fullStream = exportVideo.captureStream();
+    fullStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+
+    let mimeType = 'video/webm;codecs=vp9,opus';
+    if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm;codecs=vp8,opus';
+    if(!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'video/webm';
+
+    const recorder = new MediaRecorder(canvasStream, { mimeType, videoBitsPerSecond: 3_000_000 });
+    const chunks = [];
+    recorder.ondataavailable = (e)=>{ if(e.data.size>0) chunks.push(e.data); };
+
+    const iconSize = w * 0.14;
+    let px = w * 0.15, py = h * 0.2;
+    let vx = w * 0.16, vy = h * 0.14;
+    let lastT = null;
+    let rafId;
+
+    function roundRect(c,x,y,ww,hh,r){
+      c.beginPath();
+      c.moveTo(x+r,y);
+      c.arcTo(x+ww,y,x+ww,y+hh,r);
+      c.arcTo(x+ww,y+hh,x,y+hh,r);
+      c.arcTo(x,y+hh,x,y,r);
+      c.arcTo(x,y,x+ww,y,r);
+      c.closePath();
+      c.fill();
+    }
+
+    function drawFrame(now){
+      if(lastT === null) lastT = now;
+      const dt = (now - lastT) / 1000;
+      lastT = now;
+
+      px += vx * dt; py += vy * dt;
+      if(px <= 0 || px + iconSize >= w){ vx *= -1; px = Math.max(0, Math.min(px, w-iconSize)); }
+      if(py <= 0 || py + iconSize >= h){ vy *= -1; py = Math.max(0, Math.min(py, h-iconSize)); }
+
+      ctx.drawImage(exportVideo, 0, 0, w, h);
+
+      if(watermarkImg.complete && watermarkImg.naturalWidth){
+        ctx.globalAlpha = 0.9;
+        const ratio = watermarkImg.naturalWidth / watermarkImg.naturalHeight;
+        ctx.drawImage(watermarkImg, px, py, iconSize, iconSize/ratio);
+        ctx.globalAlpha = 1;
+      }
+
+      const label = `@${username} · Loop`;
+      ctx.font = `${Math.round(h*0.032)}px sans-serif`;
+      const tw = ctx.measureText(label).width;
+      const padX = h*0.018, padY = h*0.012;
+      const bx = h*0.03, by = h - h*0.09;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      roundRect(ctx, bx, by, tw+padX*2, h*0.045+padY, (h*0.045)/2);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, bx+padX, by + h*0.045*0.72);
+
+      rafId = requestAnimationFrame(drawFrame);
+    }
+
+    const stopPromise = new Promise((resolve)=>{
+      recorder.onstop = resolve;
+    });
+
+    exportVideo.onended = ()=>{ cancelAnimationFrame(rafId); recorder.stop(); };
+
+    recorder.start();
+    exportVideo.currentTime = 0;
+    await exportVideo.play();
+    rafId = requestAnimationFrame(drawFrame);
+
+    await stopPromise;
+
+    const outBlob = new Blob(chunks, { type:'video/webm' });
+    const outUrl = URL.createObjectURL(outBlob);
+    const a = document.createElement('a');
+    a.href = outUrl;
+    a.download = `loop-${username}-${videoId}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=> URL.revokeObjectURL(outUrl), 3000);
+
+  } catch(err){
+    console.error('Erreur téléchargement:', err);
+    let msg = "Le téléchargement a échoué. Réessaie.";
+    if(err.message === 'captureStream_unsupported') msg = "Ton navigateur ne supporte pas cette fonctionnalité.";
+    else if(/http_/.test(err.message)) msg = "La vidéo source est introuvable sur le serveur.";
+    else if(err.message === 'video_decode_failed') msg = "Ce format vidéo n'a pas pu être lu.";
+    else if(err.name === 'TypeError') msg = "Impossible d'accéder à cette vidéo (problème réseau ou de permissions serveur).";
+    alert(msg);
+  } finally {
+    if(blobUrl) URL.revokeObjectURL(blobUrl);
+    btn.disabled = false;
+    countEl.textContent = originalLabel;
+  }
+}
+
+(async function init(){
+  const ok = await requireAuth();
+  if(ok) loadVideos();
+})();
+</script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
