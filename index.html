@@ -88,7 +88,7 @@
   /* ---------- Caption block ---------- */
   .meta{
     position:relative; z-index:4; padding:0 84px 24px 16px; width:100%;
-    padding-bottom:calc(24px + env(safe-area-inset-bottom, 0px));
+    padding-bottom:calc(24px + 68px + env(safe-area-inset-bottom, 0px));
   }
   .handle{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
   .handle img{ width:34px; height:34px; border-radius:50%; object-fit:cover; border:1.5px solid var(--ink); }
@@ -99,8 +99,8 @@
 
   /* ---------- Right action rail ---------- */
   .rail{
-    position:absolute; right:12px; bottom:calc(28px + env(safe-area-inset-bottom, 0px));
-    z-index:4; display:flex; flex-direction:column; align-items:center; gap:20px;
+    position:absolute; right:12px; bottom:calc(28px + 68px + env(safe-area-inset-bottom, 0px));
+    z-index:4; display:flex; flex-direction:column; align-items:center; gap:16px;
   }
   .rail .avatar-wrap{ position:relative; margin-bottom:4px; }
   .rail .avatar-wrap img{ width:46px; height:46px; border-radius:50%; object-fit:cover; border:2px solid var(--ink); }
