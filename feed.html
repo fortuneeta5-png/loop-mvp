@@ -605,11 +605,18 @@ function downloadWithWatermark(src, username, videoId, btn){
 
   const exportVideo = document.createElement('video');
   exportVideo.crossOrigin = 'anonymous';
-  exportVideo.muted = false;
+  exportVideo.muted = true; // reste muet pour éviter le blocage autoplay — l'audio est quand même capturé via captureStream()
   exportVideo.playsInline = true;
   exportVideo.src = src;
 
+  const safetyTimeout = setTimeout(()=>{
+    alert("Le chargement de la vidéo prend trop de temps ou a échoué. Vérifie ta connexion et réessaie.");
+    btn.disabled = false;
+    countEl.textContent = originalLabel;
+  }, 12000);
+
   exportVideo.onloadedmetadata = async ()=>{
+    clearTimeout(safetyTimeout);
     try{
       const MAX_H = 960;
       const scale = Math.min(1, MAX_H / exportVideo.videoHeight);
@@ -723,6 +730,7 @@ function downloadWithWatermark(src, username, videoId, btn){
   };
 
   exportVideo.onerror = ()=>{
+    clearTimeout(safetyTimeout);
     alert("Impossible de charger cette vidéo pour le téléchargement.");
     btn.disabled = false;
     countEl.textContent = originalLabel;
