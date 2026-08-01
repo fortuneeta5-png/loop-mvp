@@ -228,6 +228,17 @@
   </div>
 </div>
 
+<div class="comments-overlay" id="downloadReadyOverlay">
+  <div class="comments-sheet" style="height:auto;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));">
+    <div style="text-align:center;">
+      <p style="font-family:'Space Grotesk';font-weight:700;font-size:16px;margin:0 0 6px;">Vidéo prête !</p>
+      <p style="color:var(--ink-dim);font-size:13.5px;margin:0 0 18px;">Appuie ci-dessous pour l'enregistrer sur ton téléphone.</p>
+      <button id="confirmDownloadBtn" style="width:100%;padding:14px;border:none;border-radius:12px;background:var(--signal);color:#fff;font-family:'Space Grotesk';font-weight:700;font-size:15px;cursor:pointer;">Enregistrer la vidéo</button>
+      <button id="cancelDownloadBtn" style="width:100%;padding:12px;border:none;background:none;color:var(--ink-faint);font-size:13px;margin-top:10px;cursor:pointer;">Annuler</button>
+    </div>
+  </div>
+</div>
+
 <nav class="bottomnav">
   <button class="navitem active">
     <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
@@ -730,13 +741,36 @@ async function downloadWithWatermark(src, username, videoId, btn){
 
     const outBlob = new Blob(chunks, { type:'video/webm' });
     const outUrl = URL.createObjectURL(outBlob);
-    const a = document.createElement('a');
-    a.href = outUrl;
-    a.download = `loop-${username}-${videoId}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=> URL.revokeObjectURL(outUrl), 3000);
+
+    await new Promise((resolve)=>{
+      const overlay = document.getElementById('downloadReadyOverlay');
+      const confirmBtn = document.getElementById('confirmDownloadBtn');
+      const cancelBtn = document.getElementById('cancelDownloadBtn');
+      overlay.classList.add('show');
+
+      function cleanup(){
+        overlay.classList.remove('show');
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        resolve();
+      }
+      function onConfirm(){
+        // Clic direct de l'utilisateur ici : le navigateur autorise le téléchargement sans le bloquer
+        const a = document.createElement('a');
+        a.href = outUrl;
+        a.download = `loop-${username}-${videoId}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        cleanup();
+      }
+      function onCancel(){ cleanup(); }
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+
+    setTimeout(()=> URL.revokeObjectURL(outUrl), 10000);
 
   } catch(err){
     console.error('Erreur téléchargement:', err);
